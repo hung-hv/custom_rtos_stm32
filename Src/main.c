@@ -18,6 +18,7 @@
  */
 
 #include <stdint.h>
+#include "led.h"
 
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
   #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
@@ -25,6 +26,14 @@
 
 int main(void)
 {
+	led_init();
+
+	while(1) {
+		led_on();
+		for(int i = 0; i < 900000; i++) {}
+		led_off();
+		for(int i = 0; i < 900000; i++) {}
+	}
     /* Loop forever */
 	for(;;);
 }
