@@ -1,7 +1,7 @@
-#include "osKernal.h"
+#include "osKernel.h"
 
 #define NUM_OF_THREADS  3
-#define STACKSIZE       100
+#define STACKSIZE       128
 
 #define BUS_FREQ      16000000U
 
@@ -11,7 +11,10 @@
 #define STK_COUNTFLAG       (1U << 16)
 #define STK_RESET           0x00000000U
 
-uint32_t MILLIS_PRESCALER = BUS_FREQ / 1000U;
+#define THUMB_BIT           24U
+
+// uint32_t MILLIS_PRESCALER = BUS_FREQ / 1000U;
+#define MILLIS_PRESCALER  (BUS_FREQ / 1000U)
 
 struct tcb{
     int32_t *stackPt;          // Pointer to stack
@@ -21,7 +24,7 @@ struct tcb{
 typedef struct tcb tcbType;
 
 tcbType tcbs[NUM_OF_THREADS];
-tcbType *currentPt;
+volatile tcbType *currentPt;
 
 int32_t TCB_STACK[NUM_OF_THREADS][STACKSIZE];
 
@@ -29,7 +32,7 @@ void osKernalStackInit(uint8_t i) {
     /* init SP point to top of stack */
     tcbs[i].stackPt = &TCB_STACK[i][STACKSIZE - 16]; // stack pointer
 
-    TCB_STACK[0][STACKSIZE - 1] = (1U << 21); // xPSR in thumb mode
+    TCB_STACK[i][STACKSIZE - 1] = (1U << THUMB_BIT); // xPSR in thumb mode
 
     /* dummy value in stack */
         TCB_STACK[i][STACKSIZE - 3]     = 0xAAAAAAAA; // LR
@@ -48,9 +51,9 @@ void osKernalStackInit(uint8_t i) {
         TCB_STACK[i][STACKSIZE - 16]    = 0xAAAAAAAA; // R4
 }
 
-uint8_t osKernelAddThreads((void)(*task0)(void),
-                           (void)(*task1)(void),
-                           (void)(*task2)(void)) {
+uint8_t osKernelAddThreads(void (*task0)(void),
+                           void (*task1)(void),
+                           void (*task2)(void)) {
 
     /* disable global interrupts */
     __disable_irq();
@@ -104,7 +107,7 @@ void osKernelLaunch(uint32_t quanta) {
     SysTick->CTRL |= STK_TICKINT; // enable systick with core clock and interrupts
 
     /* start first task */
-    osKernalStartFirstThread();
+    osSchedulerLaunch();
 }
 
 __attribute__((naked)) void SysTick_Handler(void) {
@@ -116,23 +119,25 @@ __attribute__((naked)) void SysTick_Handler(void) {
     /* saving r4 -> r11 */
     __asm("PUSH {R4-R11}");
 
-    /* save stackPt to currentPt->stackPt */
+    /* load the current stack address to R0 */
     __asm("LDR R0, =currentPt");
 
-    /* load address of currentPt */
+    /* take memory in R0 and load it to R1, now R1 points to current TCB */
     __asm("LDR R1, [R0]");
 
     /* store SP to currentPt->stackPt, save SP to tcb */
     __asm("STR SP, [R1]");
 
     /* SWITCH TO NEXT THREAD */
-    /* load r1 from 4bytes above r1 */
+
+    /* get the next TCB by +4 bytes, defined in struct.
+    * load address of next TCB to R1 */
     __asm("LDR R1, [R1, #4]"); // currentPt = currentPt->nextPt
 
-    /* store r1 at addess equals r0, i.e currentPt = r1 */
+    /* store R1 in the value that R0 point to which is currentPt, i.e currentPt = r1 (current TCB) */
     __asm("STR R1, [R0]");
 
-    /* load SP from address store in r1 */
+    /* load CPU SP from address which R1 point to */
     __asm("LDR SP, [R1]");
 
     /* restore r4->r11 */
@@ -143,4 +148,41 @@ __attribute__((naked)) void SysTick_Handler(void) {
 
     /* return from interrupt */
     __asm("BX LR");
+}
+
+/*TODO: check the order of POP LR, might take garbage value in LR*/
+void osSchedulerLaunch(void) {
+    /* Load address of currentPT in R0*/
+    __asm("LDR R0, =currentPt");
+
+    /* Load in R2 value in R0*/
+    __asm("LDR R2, [R0]");
+
+    /* Load SP from address in R2, SP = currentPT->stackPt*/
+    __asm("LDR SP, [R2]");
+
+    /* restore R4 -> R11*/
+    __asm("POP {R4-R11}");
+
+    /* restore R12*/
+    __asm("POP {R12}");
+
+    /* restore R0 -> R3*/
+    __asm("POP {R0-R3}");
+
+    /* skip LR */
+    __asm("ADD SP, SP, #4");
+
+    /*create new start location by poping LR*/
+    __asm("POP {LR}");
+
+    /* skiping PSR*/
+    __asm("ADD SP, SP, #4");
+
+    /* enable global interrupt */
+    __asm("CPSIE I");
+
+    /* return from exception */
+    __asm("BX LR");
+
 }

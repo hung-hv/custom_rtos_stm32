@@ -54,6 +54,6 @@ void timebase_init(void) {
     __enable_irq();
 }
 
-void SysTick_Handler(void) {
-    g_curr_tick += TICK_FREQ_MS;
-}
+//void SysTick_Handler(void) {
+//    g_curr_tick += TICK_FREQ_MS;
+//}

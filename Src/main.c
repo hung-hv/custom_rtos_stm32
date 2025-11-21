@@ -21,24 +21,60 @@
 #include "led.h"
 #include "uart.h"
 #include "timebase.h"
+#include "osKernel.h"
 
-#if !defined(__SOFT_FP__) && defined(__ARM_FP)
-  #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
-#endif
+// #if !defined(__SOFT_FP__) && defined(__ARM_FP)
+//   #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
+// #endif
 
-int main(void)
-{
-	led_init();
-	uart_tx_init();
-	timebase_init();
+#define QUANTA 	50U
+typedef uint32_t TaskProfiler;
 
+TaskProfiler task_0_profiler, task_1_profiler, task_2_profiler;
+
+void task0(void) {
 	while(1) {
-		led_on();
-		delay(100);
-		led_off();
-		delay(100);
-//		printf("Hello World!\r\n");
+		task_0_profiler++;
 	}
-    /* Loop forever */
-	for(;;);
 }
+
+void task1(void) {
+	while(1) {
+		task_1_profiler++;
+	}
+}
+
+void task2(void) {
+	while(1) {
+		task_2_profiler++;
+	}
+}
+
+int main(void) {
+
+	/* Init OS*/
+	osKernelAddThreads(&task0, &task1, &task2);
+	osKernelLaunch(QUANTA);
+//	while(1) {
+//
+//	}
+}
+
+
+
+// int main(void)
+// {
+// 	led_init();
+// 	uart_tx_init();
+// 	timebase_init();
+
+// 	while(1) {
+// 		led_on();
+// 		delay(100);
+// 		led_off();
+// 		delay(100);
+// //		printf("Hello World!\r\n");
+// 	}
+//     /* Loop forever */
+// 	for(;;);
+// }
