@@ -229,3 +229,6 @@ void osShedulerRRPeriodicTask(void) {
     currentPt = currentPt->nextPt;
 } 
 
+void tim2_1hz_interrupt_init(void) {
+    /* enable clock access */
+}
