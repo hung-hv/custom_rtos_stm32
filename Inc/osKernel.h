@@ -13,4 +13,8 @@ uint8_t osKernelAddThreads(void (*task0)(void),
 
 void osSchedulerLaunch(void);
 
+void osThreadYeild(void);
+
+void task3(void);
+
 #endif

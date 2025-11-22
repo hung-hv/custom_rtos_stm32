@@ -30,11 +30,17 @@
 #define QUANTA 	50U
 typedef uint32_t TaskProfiler;
 
-TaskProfiler task_0_profiler, task_1_profiler, task_2_profiler;
+TaskProfiler task_0_profiler, task_1_profiler, task_2_profiler, task_3_profiler;
+
+
+void task3(void) {
+	task_3_profiler++;
+}
 
 void task0(void) {
 	while(1) {
 		task_0_profiler++;
+		osThreadYeild();
 	}
 }
 

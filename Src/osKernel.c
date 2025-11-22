@@ -1,5 +1,7 @@
 #include "osKernel.h"
 
+#define PERIODICT_TASK_SCHEDULE   // Enable periodic task scheduling
+
 #define NUM_OF_THREADS  3
 #define STACKSIZE       128
 
@@ -13,6 +15,10 @@
 
 #define THUMB_BIT           24U
 
+#define INT_CTRL_REG        (*((volatile uint32_t*)0xE000ED04))
+#define PENDSTSET           (1U << 26)
+
+
 // uint32_t MILLIS_PRESCALER = BUS_FREQ / 1000U;
 #define MILLIS_PRESCALER  (BUS_FREQ / 1000U)
 
@@ -25,6 +31,9 @@ typedef struct tcb tcbType;
 
 tcbType tcbs[NUM_OF_THREADS];
 volatile tcbType *currentPt;
+
+#define PERIOD  100
+uint32_t timer_periodict = 0;
 
 int32_t TCB_STACK[NUM_OF_THREADS][STACKSIZE];
 
@@ -129,7 +138,7 @@ __attribute__((naked)) void SysTick_Handler(void) {
     __asm("STR SP, [R1]");
 
     /* SWITCH TO NEXT THREAD */
-
+#ifndef PERIODICT_TASK_SCHEDULE
     /* get the next TCB by +4 bytes, defined in struct.
     * load address of next TCB to R1 */
     __asm("LDR R1, [R1, #4]"); // currentPt = currentPt->nextPt
@@ -139,7 +148,20 @@ __attribute__((naked)) void SysTick_Handler(void) {
 
     /* load CPU SP from address which R1 point to */
     __asm("LDR SP, [R1]");
+#else
+    /* save context of R0 and LR*/
+    __asm("PUSH {R0, LR}");
+    /* go to function */
+    __asm("BL osShedulerRRPeriodicTask");
+    /* resume R0 and LR*/
+    __asm("POP {R0, LR}");
 
+    /* load currentPt now at R0*/
+    __asm("LDR R1, [R0]");
+
+    /* load current stack in SP*/
+    __asm("LDR SP, [R1]");
+#endif
     /* restore r4->r11 */
     __asm("POP {R4-R11}");
 
@@ -149,6 +171,8 @@ __attribute__((naked)) void SysTick_Handler(void) {
     /* return from interrupt */
     __asm("BX LR");
 }
+
+
 
 /*TODO: check the order of POP LR, might take garbage value in LR*/
 void osSchedulerLaunch(void) {
@@ -186,3 +210,22 @@ void osSchedulerLaunch(void) {
     __asm("BX LR");
 
 }
+
+void osThreadYeild(void) {
+    /* reset systick value */
+    SysTick->VAL = 0;
+
+    /*trigger systick*/
+    INT_CTRL_REG |= PENDSTSET;
+}
+
+void osShedulerRRPeriodicTask(void) {
+    timer_periodict++;
+    if (timer_periodict >= PERIOD) {
+        (*task3)();
+        timer_periodict = 0;
+    }
+    /* continues to next thread in RR already init thread 0->2*/
+    currentPt = currentPt->nextPt;
+} 
+
