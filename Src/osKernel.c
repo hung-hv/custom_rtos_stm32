@@ -18,6 +18,13 @@
 #define INT_CTRL_REG        (*((volatile uint32_t*)0xE000ED04))
 #define PENDSTSET           (1U << 26)
 
+/* Timer 2 enable */
+#define TIM2EN              (1U << 0)
+/* Counter enable */
+#define CR1_CEN             (1U << 0)
+/* Update interrupt enable */
+#define DIER_UIE            (1U << 0)
+
 
 // uint32_t MILLIS_PRESCALER = BUS_FREQ / 1000U;
 #define MILLIS_PRESCALER  (BUS_FREQ / 1000U)
@@ -231,4 +238,55 @@ void osShedulerRRPeriodicTask(void) {
 
 void tim2_1hz_interrupt_init(void) {
     /* enable clock access */
+    RCC->APB1ENR |= TIM2EN;
+    /* set timer prescaler TIMx_PSC */
+    TIM2->PSC = 16000 - 1;  // 1ms tick
+
+    /* set auto-reload TIMx_ARR*/
+    TIM2->ARR = 1000 - 1;   // 1Hz
+
+    /* clear counter TIMx_CNT*/
+    TIM2->CNT = 0;
+
+    /* enable timer TIMx_CR1 */
+    TIM2->CR1 |= CR1_CEN;
+
+    /* enable interrupt TIMx_DIER */
+    TIM2->DIER |= DIER_UIE;
+
+    /* Set priority */
+    NVIC_SetPriority(TIM2_IRQn, 5);
+
+    /* enable timer interrupt in NVIC */ 
+    NVIC_EnableIRQ(TIM2_IRQn);
+
+}
+
+void osSemaphoreCreate(uint32_t *semaphore, uint32_t initial_count) {
+    *semaphore = initial_count;
+}
+
+void osSemaphoreWait(uint32_t *semaphore) {
+    /* disable global interrupt */
+    __asm("CPSID I");
+
+    while(*semaphore <= 0) {
+        __asm("CPSIE I");
+        osThreadYeild();
+        __asm("CPSID I");
+    }
+    (*semaphore)--;
+    /* enable global interrupt */
+    __asm("CPSIE I");
+}
+
+void osSemaphoreGive(uint32_t *semaphore) {
+    /* disable global interrupt */
+    __asm("CPSID I");
+
+    /* release semaphore */
+    (*semaphore)++;
+
+    /* enable global interrupt */
+    __asm("CPSIE I");
 }

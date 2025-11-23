@@ -27,11 +27,14 @@
 //   #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
 // #endif
 
-#define QUANTA 	50U
+#define QUANTA 	10U
 typedef uint32_t TaskProfiler;
 
 TaskProfiler task_0_profiler, task_1_profiler, task_2_profiler, task_3_profiler;
+volatile TaskProfiler task_4_profiler;
 
+typedef uint32_t SemaphoreType;
+SemaphoreType uart_semaphore;
 
 void task3(void) {
 	task_3_profiler++;
@@ -39,14 +42,17 @@ void task3(void) {
 
 void task0(void) {
 	while(1) {
+		osSemaphoreWait(&uart_semaphore);
 		task_0_profiler++;
-		osThreadYeild();
+		osSemaphoreGive(&uart_semaphore);
 	}
 }
 
 void task1(void) {
 	while(1) {
+		osSemaphoreWait(&uart_semaphore);
 		task_1_profiler++;
+		osSemaphoreGive(&uart_semaphore);
 	}
 }
 
@@ -56,14 +62,26 @@ void task2(void) {
 	}
 }
 
+/* this function is called only 1 time when the system starts */
 int main(void) {
+	/*Init TIM2*/
+	tim2_1hz_interrupt_init();
 
-	/* Init OS*/
+	/* Create Semaphore */
+	osSemaphoreCreate(&uart_semaphore, 1);
+
+	/* Init OS */
 	osKernelAddThreads(&task0, &task1, &task2);
+
+	/* Start OS */
 	osKernelLaunch(QUANTA);
-//	while(1) {
-//
-//	}
+}
+
+void TIM2_IRQHandler(void) {
+	/* clear interrupt flag*/
+	TIM2->SR &= ~SR_UIF;
+	/* task() */
+	task_4_profiler++;
 }
 
 
